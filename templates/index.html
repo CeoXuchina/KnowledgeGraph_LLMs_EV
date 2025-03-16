@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <title>EV Knowledge Graph Assistant</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+  <div class="navbar">
+    <span class="app-title">EV Knowledge Graph Assistant</span>
+    <div class="navbar-buttons">
+      <button class="graph-button" onclick="location.href='/graph'">📊 View Graph</button>
+      <button class="login-button">Log in</button>
+    </div>
+  </div>
+
+  <div class="recommendation-container card">
+    <h3>Recommended Search Content</h3>
+    <div class="car-models-container">
+      <button id="prev-page" class="page-button">◀ Previous</button>
+      <div id="car-models" class="car-models-grid"></div>
+      <span id="page-indicator" class="page-indicator">Page 1 / Total X Pages</span>
+      <button id="next-page" class="page-button">Next ▶</button>
+    </div>
+    <div class="question-types-container">
+      <h3>Question Types</h3>
+      <div id="question-types" class="question-types-grid"></div>
+    </div>
+  </div>
+
+  <div class="main-container">
+    <div class="sidebar card">
+      <button class="new-conversation">+ New conversation</button>
+      <div class="history"><ul id="chat-history"></ul></div>
+    </div>
+
+    <div class="chat-container card">
+      <h3 class="chat-title">💬 Ask me anything about EVs</h3>
+
+      <div class="chat-messages" id="chat-messages"></div>
+      <div id="typing-indicator" class="typing-indicator" style="display: none;">💡 Assistant is typing...</div>
+
+      <div class="input-area">
+        <input type="text" class="input-field" id="user-input" placeholder="Type your question about EVs here..." />
+        <button class="send-button" id="send-btn">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const chatMessages = document.getElementById("chat-messages");
+    const chatHistory = document.getElementById("chat-history");
+    const userInput = document.getElementById("user-input");
+    const sendBtn = document.getElementById("send-btn");
+
+    // Used to save the most recent user question for easy use when submitting feedback
+    let lastUserQuestion = "";
+
+    // Model data
+    const carModels = ['Tesla Model 3', 'BYD ATTO 3', 'Kia EV3 Long Range', 'Tesla Model Y Long Range Dual Motor', 'Tesla Model 3 Long Range Dual Motor', 'Tesla Model 3 Long Range RWD', 'Tesla Model Y', 'BYD DOLPHIN 60.4 kWh', 'Hongqi E-HS9 99 kWh', 'MG MG4 Electric 64 kWh', 'BYD SEAL 82.5 kWh AWD Excellence', 'Renault 5 E-Tech 52kWh 150hp', 'Tesla Model Y Long Range RWD', 'Volkswagen ID.4 Pro', 'BMW iX xDrive40', 'Mercedes-Benz EQB 250+', 'Skoda Elroq 85', 'BYD HAN', 'Kia Niro EV', 'Tesla Model S Dual Motor', 'Tesla Model Y Performance', 'Hyundai Kona Electric 65 kWh', 'BYD TANG', 'Volvo EX30 Single Motor ER', 'Tesla Model S Plaid', 'BYD SEAL 82.5 kWh RWD Design', 'BMW iX1 xDrive30', 'Tesla Model 3 Performance', 'Fiat 500e Hatchback 42 kWh', 'Hyundai INSTER Long Range', 'Renault Scenic E-Tech EV87 220hp', 'Citroen e-C3', 'Kia EV3 Standard Range', 'Renault Megane E-Tech EV60 220hp', 'Mercedes-Benz EQS 450+', 'Skoda Enyaq 85', 'Hyundai INSTER Standard Range', 'Rolls-Royce Spectre', 'Kia EV6 Long Range 2WD', 'Volkswagen ID.7 Pro', 'MG Cyberster GT', 'Kia EV9 99.8 kWh AWD', 'BYD SEAL U 71.8 kWh Comfort', 'Hyundai IONIQ 5 84 kWh RWD', 'BMW iX xDrive50', 'Toyota bZ4X FWD', 'BMW i5 eDrive40 Sedan', 'Mercedes-Benz EQA 250', 'Zeekr 001 Long Range RWD', 'Peugeot e-3008 97 kWh Long Range', 'KGM Torres EVX', 'Audi Q8 e-tron 55 quattro', 'Audi A6 Sportback e-tron performance', 'BMW i4 eDrive40', 'Nissan Leaf', 'MG ZS EV Long Range', 'Honda e:Ny1', 'Audi Q6 e-tron quattro', 'Mini Countryman E', 'MG MG4 Electric 51 kWh', 'Ford Explorer Extended Range RWD', 'Nissan Ariya 87kWh', 'Porsche Macan 4 Electric', 'Mazda MX-30', 'Audi Q4 e-tron 45', 'Hyundai IONIQ 6 Long Range 2WD', 'Dacia Spring Electric 45', 'Leapmotor T03', 'Citroen e-C4', 'Peugeot e-3008 73 kWh', 'BMW i7 xDrive60', 'MG MG5 Electric Long Range', 'BMW iX1 eDrive20', 'Lynk&Co 02', 'Audi A6 Avant e-tron performance', 'Audi A6 Avant e-tron', 'Zeekr 001 Performance AWD', 'Volkswagen ID.3 Pro', 'Jeep Avenger Electric', 'Fiat Grande Panda', 'Audi A6 Sportback e-tron quattro', 'XPENG G6 RWD Long Range', 'Hyundai IONIQ 5 N', 'Kia EV6 GT', 'Hyundai IONIQ 5 63 kWh RWD', 'Peugeot e-5008 73 kWh', 'Lucid Air Grand Touring', 'Audi A6 Avant e-tron quattro', 'Volvo EX30 Twin Motor Performance', 'Volkswagen ID. Buzz NWB Pro', 'Volkswagen ID.7 Tourer Pro S', 'Peugeot e-5008 97 kWh Long Range', 'CUPRA Tavascan VZ', 'Opel Astra Electric', 'Volvo EX30 Single Motor', 'Mercedes-Benz G 580', 'Volkswagen ID.7 Pro S', 'Lexus RZ 450e', 'BYD SEAL U 87 kWh Design', 'Hyundai IONIQ 5 84 kWh AWD', 'Maxus MIFA 9', 'NIO ET5 Long Range', 'XPENG G6 RWD Standard Range', 'Smart #1 Pro+', 'Volkswagen ID.5 Pro', 'Mercedes-Benz EQE 350+', 'Hyundai IONIQ 6 Long Range AWD', 'Opel Mokka-e 50 kWh', 'NIO EL8 Long Range', 'Kia EV6 Long Range AWD', 'Polestar 2 Long Range Single Motor', 'CUPRA Born 170 kW - 59 kWh', 'Volkswagen ID.3 Pure', 'MG MG4 Electric 77 kWh', 'Tesla Model X Dual Motor', 'BMW i4 eDrive35', 'Peugeot e-208 50 kWh', 'Renault 5 E-Tech 40kWh 95hp', 'Porsche Taycan Plus', 'Smart #3 Brabus', 'Leapmotor C10', 'Tesla Model X Plaid', 'Mercedes-Benz EQA 250+', 'Subaru Solterra AWD', 'Volvo EX40 Single Motor ER', 'Mini Cooper SE', 'Hyundai IONIQ 6 Standard Range 2WD', 'BYD DOLPHIN 44.9 kWh Active', 'Toyota bZ4X AWD', 'CUPRA Born 170 kW - 77 kWh', 'Volkswagen ID.4 Pure', 'Volkswagen ID.7 Tourer Pro', 'Fiat 600e', 'BMW i5 M60 xDrive Sedan', 'Dacia Spring Electric 65', 'MG MG4 Electric XPOWER', 'Mercedes-Benz EQB 300 4MATIC', 'Ford Explorer Extended Range AWD', 'Dongfeng Box 42.3 kWh', 'Peugeot e-2008 54 kWh', 'Citroen e-C4 X 54 kWh', 'CUPRA Tavascan Endurance', 'XPENG G9 RWD Long Range', 'XPENG G9 RWD Standard Range', 'BMW i4 M50', 'Kia EV6 Standard Range 2WD', 'NIO ET7 Standard Range', 'BMW i5 eDrive40 Touring', 'Mercedes-Benz EQS SUV 580 4MATIC', 'Skoda Enyaq Coupe 85', 'Polestar 4 Long Range Single Motor', 'Lancia Ypsilon', 'Opel Corsa Electric 51 kWh', 'Porsche Macan Electric', 'Voyah Free 106 kWh', 'BMW iX2 xDrive30', 'Smart #1 Brabus', 'Volkswagen ID.3 Pro S', 'Zeekr X Privilege AWD', 'Mercedes-Benz EQB 350 4MATIC', 'Omoda E5', 'MG ZS EV Standard Range', 'Polestar 4 Long Range Dual Motor', 'Nissan Leaf e+', 'Skoda Elroq 50', 'Opel Frontera 44 kWh', 'Skoda Enyaq 85x', 'Porsche Macan Turbo Electric', 'Volvo EX40 Single Motor', 'Kia EV9 99.8 kWh RWD', 'BMW iX2 eDrive20', 'Audi Q6 e-tron performance', 'Nissan Ariya 63kWh', 'BMW i7 M70 xDrive', 'Ford Capri Extended Range AWD'];
+
+    // Question Types
+    const questionTypes = [
+      "Available Since", "Available to Order", "Price", "Battery", "Real Range", "Performance", "Charging", "Bidirectional Charging", "Energy Consumption", "Real Energy Consumption", "Dimensions and Weight"
+    ];
+
+
+    const tableBody = document.getElementById("recommendation-table");
+
+    let currentPage = 0;
+    const modelsPerPage = 15;
+    const totalPages = Math.ceil(carModels.length / modelsPerPage);
+
+
+    const carModelsContainer = document.getElementById("car-models");
+    const prevPageButton = document.getElementById("prev-page");
+    const nextPageButton = document.getElementById("next-page");
+    const pageIndicator = document.getElementById("page-indicator");
+    const questionTypesContainer = document.getElementById("question-types");
+
+    function scrollToBottom() {
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function addUserMessage(message) {
+      const messageDiv = document.createElement("div");
+      messageDiv.classList.add("message", "user-message");
+
+      const avatar = document.createElement("img");
+      avatar.src = "/static/icons/user.png";
+      avatar.classList.add("avatar");
+
+      const span = document.createElement("span");
+      span.classList.add("user-message-span");
+      span.innerText = message;
+
+      messageDiv.appendChild(span);
+      messageDiv.appendChild(avatar);
+      chatMessages.appendChild(messageDiv);
+
+      addMessageToHistory(message);
+      scrollToBottom();
+    }
+
+    function addBotMessage(message, responseTime = null) {
+      const messageDiv = document.createElement("div");
+      messageDiv.classList.add("message", "bot-message");
+
+      const avatar = document.createElement("img");
+      avatar.src = "/static/icons/bot.png";
+      avatar.classList.add("avatar");
+
+      const span = document.createElement("span");
+      span.classList.add("bot-message-span");
+      span.innerText = "";
+
+      messageDiv.appendChild(avatar);
+      messageDiv.appendChild(span);
+      chatMessages.appendChild(messageDiv);
+
+
+      let index = 0;
+      const typingSpeed = 15;
+
+      const plainText = message.replace(/<[^>]+>/g, "");
+
+      function typeWriter() {
+        if (index < plainText.length) {
+          span.innerText += plainText.charAt(index);
+          index++;
+          scrollToBottom();
+          setTimeout(typeWriter, typingSpeed);
+        } else {
+
+          span.innerHTML = marked.parse(message);
+
+          document.getElementById("typing-indicator").style.display = "none";
+
+          if (responseTime !== null) {
+            const timeInfo = document.createElement("div");
+            timeInfo.classList.add("response-time-info");
+            timeInfo.innerText = `⏱ Response time: ${responseTime} seconds`;
+            chatMessages.appendChild(timeInfo);
+          }
+
+
+          if (lastUserQuestion.trim() !== "") {
+            const feedbackDiv = document.createElement("div");
+            feedbackDiv.classList.add("feedback-container");
+            feedbackDiv.innerHTML = `
+                <p>Was this answer correct?</p>
+                <button class="feedback-button" id="yes-btn">Yes</button>
+                <button class="feedback-button" id="no-btn">No</button>
+            `;
+
+            feedbackDiv.querySelector("#yes-btn").addEventListener("click", () => {
+              sendFeedbackToServer(lastUserQuestion, message, true);
+              feedbackDiv.remove();
+            });
+            feedbackDiv.querySelector("#no-btn").addEventListener("click", () => {
+              sendFeedbackToServer(lastUserQuestion, message, false);
+              feedbackDiv.remove();
+            });
+            chatMessages.appendChild(feedbackDiv);
+            scrollToBottom();
+          }
+        }
+      }
+
+      typeWriter();
+    }
+
+
+    // Save user messages to the history sidebar
+    function addMessageToHistory(message) {
+      const listItem = document.createElement("li");
+      listItem.classList.add("history-item");
+      listItem.innerText = message.length > 30 ? message.substring(0, 30) + "..." : message;
+      chatHistory.appendChild(listItem);
+    }
+
+    // Call the backend /ask interface
+    async function sendMessageToServer(question) {
+      try {
+        const response = await fetch("/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question })
+        });
+        const data = await response.json();
+        return {
+          answer: data.answer || "No valid response.",
+          time: data.time || null
+        }
+      } catch (err) {
+        console.error(err);
+        return { answer: "Error: something went wrong!", time: null };
+      }
+    }
+
+    //Send feedback to the backend
+    async function sendFeedbackToServer(question, answer, correctness) {
+      try {
+        const response = await fetch("/feedback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            question: question,
+            answer: answer,
+            correctness: correctness,
+            response_time: responseTime
+          })
+        });
+        const data = await response.json();
+        console.log("Feedback response:", data);
+      } catch (err) {
+        console.error("Failed to send feedback:", err);
+      }
+    }
+
+    // Processing sent messages
+    async function handleSendMessage() {
+      const question = userInput.value.trim();
+      if (!question) return;
+
+      lastUserQuestion = question;
+
+      addUserMessage(question);
+      userInput.value = "";
+
+      document.getElementById("typing-indicator").style.display = "block";
+      const { answer, time } = await sendMessageToServer(question);
+
+      addBotMessage(answer, time);
+    }
+
+    sendBtn.addEventListener("click", handleSendMessage);
+    userInput.addEventListener("keydown", function(e) {
+      if (e.key === "Enter") {
+        handleSendMessage();
+      }
+    });
+
+    //recommendation
+
+    // Update page number indicator
+    function updatePageIndicator() {
+      pageIndicator.innerText = `Page ${currentPage + 1} / Total ${totalPages} Pages`;
+    }
+    // Rendering Model
+    function renderCarModels() {
+      carModelsContainer.innerHTML = "";
+      const start = currentPage * modelsPerPage;
+      const end = start + modelsPerPage;
+      const modelsToShow = carModels.slice(start, end);
+
+      modelsToShow.forEach(model => {
+        const modelDiv = document.createElement("div");
+        modelDiv.classList.add("car-model");
+        modelDiv.innerText = model;
+
+        // Click to fill in the input box
+        modelDiv.addEventListener("click", () => {
+          document.getElementById("user-input").value = `${model}`;
+        });
+
+        carModelsContainer.appendChild(modelDiv);
+      });
+
+      // Control the paging button status
+      prevPageButton.disabled = currentPage === 0;
+      nextPageButton.disabled = currentPage === totalPages - 1;
+
+      updatePageIndicator();
+    }
+
+    // Rendering Problem Types
+    function renderQuestionTypes() {
+      questionTypesContainer.innerHTML = "";
+      questionTypes.forEach(type => {
+        const typeDiv = document.createElement("div");
+        typeDiv.classList.add("question-type");
+        typeDiv.innerText = type;
+
+        // Click to fill in the input box
+        typeDiv.addEventListener("click", () => {
+          document.getElementById("user-input").value =`${type}`;
+        });
+
+        questionTypesContainer.appendChild(typeDiv);
+      });
+    }
+
+    // Binding page turning events
+    prevPageButton.addEventListener("click", () => {
+      if (currentPage > 0) {
+        currentPage--;
+        renderCarModels();
+      }
+    });
+
+    nextPageButton.addEventListener("click", () => {
+      if (currentPage < totalPages - 1) {
+        currentPage++;
+        renderCarModels();
+      }
+    });
+
+    // Executed when the page loads
+    window.onload = function () {
+      addBotMessage("Hello, I'm your new energy vehicle assistant. How can I help you today?");
+
+      renderCarModels();
+      renderQuestionTypes();
+    };
+  </script>
+</body>
+</html>
