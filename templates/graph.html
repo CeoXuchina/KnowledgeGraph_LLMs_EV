@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EV Knowledge Graph Assistant</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Inter', sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f1f5f9;
+      color: #1f2937;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .navbar {
+      width: 100%;
+      background: #0d1b2a;
+      color: white;
+      padding: 16px 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+    }
+    .app-title {
+      font-size: 22px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .navbar-buttons {
+      display: flex;
+      gap: 10px;
+    }
+    .navbar-buttons button {
+      background: transparent;
+      color: white;
+      border: 1px solid white;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      white-space: nowrap;
+    }
+    .navbar-buttons button:hover {
+      background: white;
+      color: #0d1b2a;
+    }
+    .main-content {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      height: calc(100vh - 72px);
+      width: 100%;
+    }
+    .graph-container {
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+      background: #f9fafb;
+      overflow: hidden;
+      min-width: 0;
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+      margin-bottom: 12px;
+    }
+    .toolbar button, .toolbar input {
+      font-size: 14px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: 1px solid #d1d5db;
+    }
+    .toolbar button {
+      background: #1d4ed8;
+      color: white;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+    .toolbar button:hover {
+      background: #2563eb;
+    }
+    svg {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      border: 1px solid #e5e7eb;
+    }
+    .sidebar {
+      width: 340px;
+      background-color: #e0e7ff;
+      border-left: 1px solid #c7d2fe;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      font-size: 16px;
+      font-weight: 400;
+      color: #111827;
+      flex-shrink: 0;
+      box-shadow: -4px 0 12px rgba(0,0,0,0.08);
+    }
+    .sidebar h3 {
+      margin: 0 0 16px;
+      font-size: 20px;
+      font-weight: 700;
+      color: #1d4ed8;
+      border-bottom: 1px solid #c7d2fe;
+      padding-bottom: 10px;
+    }
+    .sidebar .info-item {
+      margin-bottom: 16px;
+      padding: 14px 18px;
+      background: #f4f7ff;
+      border-radius: 12px;
+      border: 1px solid #dbeafe;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      transition: background 0.3s ease;
+    }
+    .sidebar .info-item:hover {
+      background: #e0ecff;
+    }
+    .sidebar .info-item strong {
+      display: inline-block;
+      width: 100px;
+      color: #1e3a8a;
+      font-weight: 600;
+      font-size: 15px;
+    }
+    .tooltip {
+      position: absolute;
+      padding: 8px 12px;
+      background-color: rgba(0,0,0,0.8);
+      color: white;
+      border-radius: 8px;
+      font-size: 13px;
+      pointer-events: none;
+    }
+    .no-data-message {
+      text-align: center;
+      color: #e53935;
+      margin-top: 30px;
+      font-size: 18px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="navbar">
+    <span class="app-title">EV Knowledge Graph Assistant</span>
+    <div class="navbar-buttons">
+      <button onclick="location.href='/'">Back to Chat</button>
+    </div>
+  </div>
+  <div class="main-content">
+    <div class="graph-container">
+      <div class="toolbar">
+        <button onclick="exportGraph()">📤 Export Graph as JSON</button>
+        <input type="text" id="searchInput" placeholder="🔍 Search for node name..." oninput="searchNode()">
+        <button onclick="resetZoom()">🔄 Reset View</button>
+      </div>
+      <div id="no-data" class="no-data-message" style="display: none;">⚠ No data, please check Neo4j</div>
+      <svg></svg>
+    </div>
+    <div class="sidebar">
+      <h3>🧠 Node Details</h3>
+      <div id="node-details">
+        <div class="info-item"><strong>Name:</strong> -</div>
+        <div class="info-item"><strong>Label:</strong> -</div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const svg = d3.select("svg");
+    const width = +svg.attr("width");
+    const height = +svg.attr("height");
+    const tooltip = d3.select("body").append("div").attr("class", "tooltip").style("opacity", 0);
+    const zoomGroup = svg.append("g");
+
+    let simulation, zoom, nodeSelection, labelSelection;
+    let allNodes = [], allLinks = [], expandedModels = new Set();
+
+    zoom = d3.zoom()
+      .scaleExtent([0.3, 5])
+      .on("zoom", (event) => { zoomGroup.attr("transform", event.transform); });
+
+    svg.call(zoom).on("dblclick.zoom", null);
+
+    function renderGraph(nodes, links) {
+      zoomGroup.selectAll("*").remove();
+      simulation = d3.forceSimulation(nodes)
+        .force("link", d3.forceLink(links).id(d => d.id).distance(150))
+        .force("charge", d3.forceManyBody().strength(-80))
+        .force("center", d3.forceCenter(width / 2, height / 2));
+
+      svg.append("defs").append("marker")
+        .attr("id", "arrow")
+        .attr("viewBox", "0 -5 10 10")
+        .attr("refX", 22)
+        .attr("refY", 0)
+        .attr("markerWidth", 6)
+        .attr("markerHeight", 6)
+        .attr("orient", "auto")
+        .append("path")
+        .attr("d", "M0,-5L10,0L0,5")
+        .attr("fill", "#aaa");
+
+      const link = zoomGroup.append("g")
+        .attr("stroke", "#aaa")
+        .selectAll("line")
+        .data(links)
+        .join("line")
+        .attr("stroke-width", 1.5)
+        .attr("marker-end", "url(#arrow)");
+
+      nodeSelection = zoomGroup.append("g")
+        .attr("stroke", "#fff")
+        .attr("stroke-width", 1.5)
+        .selectAll("circle")
+        .data(nodes)
+        .join("circle")
+        .attr("r", 8)
+        .attr("fill", d => d.label === 'CAR' ? '#e53935' : d.label === 'Brand' ? '#1e88e5' : d.label === 'Model' ? '#fb8c00' : '#9e9e9e')
+        .on("mouseover", (event, d) => {
+          tooltip.transition().duration(200).style("opacity", .9);
+          tooltip.html(`<strong>${d.label}</strong><br>${d.name || ''}`)
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY - 20) + "px");
+        })
+        .on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0))
+        .on("dblclick", function(event, d) { toggleModelDetails(d); })
+        .on("click", function(event, d) { showNodeDetails(d); })
+
+        .call(d3.drag()
+        .on("start", dragStarted)
+        .on("drag", dragged)
+        .on("end", dragEnded)
+      );
+
+      labelSelection = zoomGroup.append("g")
+        .selectAll("text")
+        .data(nodes)
+        .join("text")
+        .text(d => (d.name && d.name.length > 30 ? d.name.slice(0, 30) + '…' : d.name || d.label))
+        .attr("font-size", 12)
+        .attr("dx", 12)
+        .attr("dy", 4);
+
+      simulation.on("tick", () => {
+        link.attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+        nodeSelection.attr("cx", d => d.x).attr("cy", d => d.y);
+        labelSelection.attr("x", d => d.x).attr("y", d => d.y);
+      });
+    }
+
+    function dragStarted(event, d) {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+      }
+
+    function dragged(event, d) {
+      d.fx = event.x;
+      d.fy = event.y;
+    }
+
+    function dragEnded(event, d) {
+      if (!event.active) simulation.alphaTarget(0);
+    }
+
+    function showNodeDetails(d) {
+      const panel = document.getElementById("node-details");
+      panel.innerHTML = `<div class='info-item'><strong>Name:</strong> ${d.name}</div><div class='info-item'><strong>Label:</strong> ${d.label}</div>`;
+    }
+
+    function toggleModelDetails(modelNode) {
+      if (modelNode.label !== 'Model') return;
+      const modelName = modelNode.name;
+      if (!expandedModels.has(modelName)) {
+        fetch(`/graph-data/model-details?name=${encodeURIComponent(modelName)}`)
+          .then(response => response.json())
+          .then(data => {
+            allNodes = allNodes.concat(data.nodes.filter(n => !allNodes.some(existing => existing.id === n.id)));
+            allLinks = allLinks.concat(data.links.filter(l => !allLinks.some(existing => existing.source === l.source && existing.target === l.target)));
+            expandedModels.add(modelName);
+            renderGraph(allNodes, allLinks);
+          });
+      } else {
+        allLinks = allLinks.filter(link => !(link.source === modelNode.id || link.target === modelNode.id));
+        const connectedIds = new Set(allLinks.flatMap(link => [link.source, link.target]));
+        allNodes = allNodes.filter(node => connectedIds.has(node.id));
+        expandedModels.delete(modelName);
+        renderGraph(allNodes, allLinks);
+      }
+    }
+
+    function exportGraph() {
+      const exportData = { nodes: allNodes, links: allLinks };
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'knowledge_graph_export.json';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    function searchNode() {
+      const input = document.getElementById("searchInput").value.toLowerCase();
+      nodeSelection.attr("stroke", d => d.name.toLowerCase().includes(input) ? "yellow" : "#fff")
+                   .attr("stroke-width", d => d.name.toLowerCase().includes(input) ? 4 : 1.5);
+    }
+
+    function resetZoom() {
+      svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
+    }
+
+    fetch('/graph-data/init')
+      .then(response => response.json())
+      .then(data => {
+        if (!data.nodes || data.nodes.length === 0 || !data.links || data.links.length === 0) {
+          document.getElementById("no-data").style.display = "block";
+          return;
+        }
+        allNodes = data.nodes;
+        allLinks = data.links;
+        renderGraph(allNodes, allLinks);
+      })
+      .catch(err => {
+        console.error("❌ Failed to load graph data:", err);
+        document.getElementById("no-data").style.display = "block";
+      });
+  </script>
+</body>
+</html>
