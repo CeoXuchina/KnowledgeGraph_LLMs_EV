@@ -1,0 +1,38 @@
+LOAD CSV WITH HEADERS FROM "file:///applied_data_delete_safe_Mis.csv" AS row
+
+// 创建中心节点CAR并连接Brand节点
+MERGE (carCenter:CAR {name: "Central CAR Node"})
+MERGE (brand:Brand {name: row.Brand})
+MERGE (carCenter)-[:INCLUDES]->(brand)
+
+// 创建Model节点并连接到Brand节点
+MERGE (model:Model {name: row.Model, available_since: row.Available_Since})
+MERGE (brand)-[:HAS_MODEL]->(model)
+
+// 为每个Model创建唯一的属性节点
+MERGE (availableSince:AvailableSince {date: row.Available_Since, model: row.Model})
+MERGE (availableToOrder:AvailableToOrder {details: row.Available_to_Order, model: row.Model})
+MERGE (price:Price {details: row.Price, model: row.Model})
+MERGE (battery:Battery {details: row.Battery, model: row.Model})
+MERGE (realRange:RealRange {details: row.Real_Range, model: row.Model})
+MERGE (performance:Performance {details: row.Performance, model: row.Model})
+MERGE (charging:Charging {details: row.Charging, model: row.Model})
+MERGE (bidirectionalCharging:BidirectionalCharging {details: row.Bidirectional_Charging, model: row.Model})
+MERGE (energyConsumption:EnergyConsumption {details: row.Energy_Consumption, model: row.Model})
+MERGE (realEnergyConsumption:RealEnergyConsumption {details: row.Real_Energy_Consumption, model: row.Model})
+MERGE (dimensionsWeight:DimensionsAndWeight {details: row.Dimensions_and_Weight, model: row.Model})
+MERGE (url:URL {link: row.URL, model: row.Model})
+
+// 将Model节点与各个属性节点连接
+MERGE (model)-[:HAS_AVAILABLE_SINCE]->(availableSince)
+MERGE (model)-[:HAS_AVAILABLE_TO_ORDER]->(availableToOrder)
+MERGE (model)-[:HAS_PRICE]->(price)
+MERGE (model)-[:HAS_BATTERY]->(battery)
+MERGE (model)-[:HAS_REAL_RANGE]->(realRange)
+MERGE (model)-[:HAS_PERFORMANCE]->(performance)
+MERGE (model)-[:HAS_CHARGING]->(charging)
+MERGE (model)-[:HAS_BIDIRECTIONAL_CHARGING]->(bidirectionalCharging)
+MERGE (model)-[:HAS_ENERGY_CONSUMPTION]->(energyConsumption)
+MERGE (model)-[:HAS_REAL_ENERGY_CONSUMPTION]->(realEnergyConsumption)
+MERGE (model)-[:HAS_DIMENSIONS_AND_WEIGHT]->(dimensionsWeight)
+MERGE (model)-[:HAS_URL]->(url);
